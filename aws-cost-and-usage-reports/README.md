@@ -16,16 +16,6 @@ Full setup guide: [docs.massdriver.cloud/integrations/aws-cost-and-usage-reports
 
 ## Usage
 
-```hcl
-module "massdriver_cur" {
-  source = "github.com/massdriver-cloud/integrations//aws-cost-and-usage-reports"
-
-  massdriver_aws_account_id = "YOUR_MASSDRIVER_ACCOUNT_ID"
-}
-```
-
-Or clone and apply directly:
-
 ```bash
 git clone https://github.com/massdriver-cloud/integrations.git
 cd integrations/aws-cost-and-usage-reports
@@ -34,11 +24,13 @@ tofu init
 tofu apply
 ```
 
-## Inputs
+Or as a module:
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| massdriver_aws_account_id | The AWS account ID that Massdriver uses to assume the role | `string` | n/a | yes |
+```hcl
+module "massdriver_cur" {
+  source = "github.com/massdriver-cloud/integrations//aws-cost-and-usage-reports"
+}
+```
 
 ## Outputs
 
@@ -47,8 +39,8 @@ tofu apply
 | bucket_name | The name of the S3 bucket storing CUR reports |
 | bucket_arn | The ARN of the S3 bucket |
 | report_name | The name of the Cost and Usage Report |
-| iam_role_arn | The ARN of the IAM role for Massdriver |
-| external_id | The external ID required when assuming the role (sensitive) |
+| access_key_id | The access key ID for the massdriver-costs IAM user |
+| secret_access_key | The secret access key (sensitive) |
 | massdriver_integration_config | All configuration values for Massdriver (sensitive) |
 
 ## Resources Created
@@ -56,13 +48,15 @@ tofu apply
 - S3 bucket for CUR reports
 - S3 bucket policy for AWS Billing service
 - Cost and Usage Report definition
-- IAM role for cross-account access
+- IAM user `massdriver-costs`
 - IAM policy with minimal read permissions
+- Access key for the IAM user
 
 ## Permissions
 
-The IAM role grants Massdriver read-only access:
+The IAM user grants Massdriver read-only access:
 
+- `s3:HeadBucket` - Verify bucket access
 - `s3:ListBucket` - List report files
 - `s3:GetObject` - Download reports
 - `tag:GetResources` - Read resource tags for cost attribution

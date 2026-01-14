@@ -98,34 +98,27 @@ resource "aws_cur_report_definition" "massdriver" {
 }
 
 # -----------------------------------------------------------------------------
-# IAM ROLE FOR MASSDRIVER
+# IAM USER FOR MASSDRIVER
 # -----------------------------------------------------------------------------
 
-resource "random_uuid" "external_id" {}
-
-resource "aws_iam_role" "massdriver_cur_reader" {
-  name = "massdriver-cur-reader"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { AWS = var.massdriver_aws_account_id }
-      Action    = "sts:AssumeRole"
-      Condition = { StringEquals = { "sts:ExternalId" = random_uuid.external_id.result } }
-    }]
-  })
-
+resource "aws_iam_user" "massdriver_costs" {
+  name = "massdriver-costs"
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy" "cur_reader" {
-  name = "massdriver-cur-reader-policy"
-  role = aws_iam_role.massdriver_cur_reader.id
+resource "aws_iam_user_policy" "massdriver_costs" {
+  name = "massdriver-costs-policy"
+  user = aws_iam_user.massdriver_costs.name
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        Sid      = "HeadBucket"
+        Effect   = "Allow"
+        Action   = ["s3:HeadBucket"]
+        Resource = "*"
+      },
       {
         Sid      = "ListBucket"
         Effect   = "Allow"
@@ -148,13 +141,8 @@ resource "aws_iam_role_policy" "cur_reader" {
   })
 }
 
-# -----------------------------------------------------------------------------
-# VARIABLES
-# -----------------------------------------------------------------------------
-
-variable "massdriver_aws_account_id" {
-  description = "The AWS account ID that Massdriver uses to assume the role"
-  type        = string
+resource "aws_iam_access_key" "massdriver_costs" {
+  user = aws_iam_user.massdriver_costs.name
 }
 
 # -----------------------------------------------------------------------------
@@ -176,23 +164,23 @@ output "report_name" {
   value       = aws_cur_report_definition.massdriver.report_name
 }
 
-output "iam_role_arn" {
-  description = "The ARN of the IAM role for Massdriver"
-  value       = aws_iam_role.massdriver_cur_reader.arn
+output "access_key_id" {
+  description = "The access key ID for the massdriver-costs IAM user"
+  value       = aws_iam_access_key.massdriver_costs.id
 }
 
-output "external_id" {
-  description = "The external ID required when assuming the role"
-  value       = random_uuid.external_id.result
+output "secret_access_key" {
+  description = "The secret access key for the massdriver-costs IAM user"
+  value       = aws_iam_access_key.massdriver_costs.secret
   sensitive   = true
 }
 
 output "massdriver_integration_config" {
   description = "Configuration values to provide to Massdriver"
   value = {
-    iam_role_arn = aws_iam_role.massdriver_cur_reader.arn
-    external_id  = random_uuid.external_id.result
-    bucket_name  = aws_s3_bucket.cur_reports.bucket
+    access_key_id     = aws_iam_access_key.massdriver_costs.id
+    secret_access_key = aws_iam_access_key.massdriver_costs.secret
+    bucket_name       = aws_s3_bucket.cur_reports.bucket
   }
   sensitive = true
 }
