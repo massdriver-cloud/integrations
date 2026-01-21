@@ -49,11 +49,11 @@ variable "export_recurrence_duration" {
   description = <<-EOT
     Duration for the cost management export recurrence period. This determines when the export will stop running.
     Format: time duration string (e.g., "17520h" for ~2 years, "43800h" for ~5 years).
-    
+
     WARNING: The export will automatically stop after this duration. Plan to update this value or re-apply
     the configuration before the end date to ensure continuous operation. Consider setting a calendar reminder
     or implementing automated monitoring to alert before expiration.
-    
+
     Default: "17520h" (~2 years)
   EOT
   type        = string
@@ -64,10 +64,10 @@ variable "service_principal_password_duration" {
   description = <<-EOT
     Duration for the service principal password expiration. This determines when the password will expire.
     Format: time duration string (e.g., "17520h" for ~2 years, "43800h" for ~5 years).
-    
+
     WARNING: The service principal password will expire after this duration. Plan to rotate credentials
     or re-apply the configuration before expiration to avoid service interruption.
-    
+
     Default: "17520h" (~2 years)
   EOT
   type        = string
@@ -78,13 +78,39 @@ variable "location" {
   description = <<-EOT
     The Azure region where resources will be deployed. This allows you to deploy resources in your preferred
     region or comply with your organization's data residency requirements.
-    
+
     Examples: "eastus", "westus2", "westeurope", "southeastasia"
-    
+
     Default: "eastus"
   EOT
   type        = string
   default     = "eastus"
+}
+
+variable "tags" {
+  description = <<-EOT
+    A map of tags to assign to Azure resources (resource group, storage account, etc.).
+    These tags will be merged with required tags, with required tags taking precedence.
+
+    Required tag: "managed-by" = "massdriver" (always present, cannot be overridden)
+
+    Default: {}
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
+variable "azuread_tags" {
+  description = <<-EOT
+    Tags (labels) to apply to Azure AD resources (application and service principal).
+    Azure AD resources require tags as a list of strings, unlike Azure resources which use key-value maps.
+
+    Required tag: "massdriver" (always present in the list)
+
+    Default: []
+  EOT
+  type        = list(string)
+  default     = []
 }
 
 # -----------------------------------------------------------------------------
@@ -110,9 +136,19 @@ locals {
   container_name       = "massdriver-costs-${local.suffix}"
   export_name          = "massdriver-costs"
 
-  common_tags = {
+  # Required tags for Azure resources - "managed-by" must always be "massdriver"
+  required_tags = {
     "managed-by" = "massdriver"
   }
+
+  # Merge user-provided tags with required tags (required tags take precedence)
+  common_tags = merge(var.tags, local.required_tags)
+
+  # Required tag for Azure AD resources - "massdriver" must always be present
+  required_azuread_tag = "massdriver"
+
+  # Merge user-provided Azure AD tags with required tag, ensuring "massdriver" is present
+  azuread_tags_merged = distinct(concat(var.azuread_tags, [local.required_azuread_tag]))
 }
 
 # -----------------------------------------------------------------------------
@@ -147,8 +183,8 @@ resource "azurerm_storage_account" "costs" {
 # -----------------------------------------------------------------------------
 
 resource "azurerm_storage_container" "exports" {
-  name                 = local.container_name
-  storage_account_id   = azurerm_storage_account.costs.id
+  name                  = local.container_name
+  storage_account_id    = azurerm_storage_account.costs.id
   container_access_type = "private"
 }
 
@@ -184,14 +220,16 @@ resource "azurerm_subscription_cost_management_export" "massdriver" {
 
 resource "azuread_application" "massdriver" {
   display_name = "massdriver-cost-reader"
-
-  tags = ["massdriver", "cost-management"]
+  # Azure AD resources use tags as a list of strings, not a key-value map like Azure resources
+  # Required tag "massdriver" is always included via local.azuread_tags_merged
+  tags = local.azuread_tags_merged
 }
 
 resource "azuread_service_principal" "massdriver" {
   client_id = azuread_application.massdriver.client_id
-
-  tags = ["massdriver", "cost-management"]
+  # Azure AD resources use tags as a list of strings, not a key-value map like Azure resources
+  # Required tag "massdriver" is always included via local.azuread_tags_merged
+  tags = local.azuread_tags_merged
 }
 
 resource "time_static" "password_start" {}

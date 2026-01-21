@@ -113,9 +113,9 @@ resource "aws_cur_report_definition" "massdriver" {
   s3_prefix                  = "reports"
   s3_region                  = "us-east-1"
   # additional_artifacts options: "REDSHIFT", "QUICKSIGHT", "ATHENA"
-  additional_artifacts       = var.cur_report_additional_artifacts
+  additional_artifacts = var.cur_report_additional_artifacts
 
-  report_versioning          = "OVERWRITE_REPORT"
+  report_versioning = "OVERWRITE_REPORT"
 
   depends_on = [aws_s3_bucket_policy.cur_reports]
 }
@@ -193,13 +193,13 @@ output "access_key_id" {
 }
 
 output "secret_access_key" {
-  description = "The secret access key for the massdriver-costs IAM user. WARNING: This value is stored in Terraform state. Treat state files as sensitive and consider using AWS Secrets Manager for production deployments."
+  description = "The secret access key for the massdriver-costs IAM user"
   value       = aws_iam_access_key.massdriver_costs.secret
   sensitive   = true
 }
 
 output "massdriver_integration_config" {
-  description = "Configuration values to provide to Massdriver. WARNING: Contains sensitive credentials stored in Terraform state. Treat state files as sensitive and consider using AWS Secrets Manager for production deployments."
+  description = "Configuration values to provide to Massdriver"
   value = {
     access_key_id     = aws_iam_access_key.massdriver_costs.id
     secret_access_key = aws_iam_access_key.massdriver_costs.secret
