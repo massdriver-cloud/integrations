@@ -20,17 +20,38 @@ terraform {
   }
 }
 
+variable "tags" {
+  description = "A map of tags to assign to the resources. These tags will be merged with common_tags, with common_tags taking precedence for the 'managed-by' key."
+  type        = map(string)
+  default     = {}
+}
+
+variable "name_prefix" {
+  description = "Prefix used for naming resources (bucket, report, IAM user). Defaults to 'massdriver-costs'."
+  type        = string
+  default     = "massdriver-costs"
+}
+
+variable "cur_report_additional_artifacts" {
+  description = "List of additional artifacts to include in the Cost and Usage Report. Valid options: 'REDSHIFT', 'QUICKSIGHT', 'ATHENA'. Defaults to an empty list."
+  type        = list(string)
+  default     = []
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
   account_id    = data.aws_caller_identity.current.account_id
   bucket_suffix = substr(md5(local.account_id), 0, 8)
-  bucket_name   = "massdriver-costs-${local.bucket_suffix}"
-  report_name   = "massdriver-costs"
+  bucket_name   = "${var.name_prefix}-${local.bucket_suffix}"
+  report_name   = var.name_prefix
 
   common_tags = {
     "managed-by" = "massdriver"
   }
+
+  # Merge tags: user-provided tags first, then common_tags (common_tags wins for managed-by)
+  merged_tags = merge(var.tags, local.common_tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -39,7 +60,7 @@ locals {
 
 resource "aws_s3_bucket" "cur_reports" {
   bucket = local.bucket_name
-  tags   = local.common_tags
+  tags   = local.merged_tags
 }
 
 resource "aws_s3_bucket_policy" "cur_reports" {
@@ -91,7 +112,9 @@ resource "aws_cur_report_definition" "massdriver" {
   s3_bucket                  = aws_s3_bucket.cur_reports.bucket
   s3_prefix                  = "reports"
   s3_region                  = "us-east-1"
-  additional_artifacts       = ["REDSHIFT", "QUICKSIGHT"]
+  # additional_artifacts options: "REDSHIFT", "QUICKSIGHT", "ATHENA"
+  additional_artifacts       = var.cur_report_additional_artifacts
+
   report_versioning          = "OVERWRITE_REPORT"
 
   depends_on = [aws_s3_bucket_policy.cur_reports]
@@ -102,12 +125,12 @@ resource "aws_cur_report_definition" "massdriver" {
 # -----------------------------------------------------------------------------
 
 resource "aws_iam_user" "massdriver_costs" {
-  name = "massdriver-costs"
-  tags = local.common_tags
+  name = var.name_prefix
+  tags = local.merged_tags
 }
 
 resource "aws_iam_user_policy" "massdriver_costs" {
-  name = "massdriver-costs-policy"
+  name = "${var.name_prefix}-policy"
   user = aws_iam_user.massdriver_costs.name
 
   policy = jsonencode({
@@ -181,6 +204,7 @@ output "massdriver_integration_config" {
     access_key_id     = aws_iam_access_key.massdriver_costs.id
     secret_access_key = aws_iam_access_key.massdriver_costs.secret
     bucket_name       = aws_s3_bucket.cur_reports.bucket
+    bucket_region     = aws_s3_bucket.cur_reports.region
   }
   sensitive = true
 }
