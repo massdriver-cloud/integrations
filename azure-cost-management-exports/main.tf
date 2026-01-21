@@ -74,6 +74,19 @@ variable "service_principal_password_duration" {
   default     = "17520h" # ~2 years
 }
 
+variable "location" {
+  description = <<-EOT
+    The Azure region where resources will be deployed. This allows you to deploy resources in your preferred
+    region or comply with your organization's data residency requirements.
+    
+    Examples: "eastus", "westus2", "westeurope", "southeastasia"
+    
+    Default: "eastus"
+  EOT
+  type        = string
+  default     = "eastus"
+}
+
 # -----------------------------------------------------------------------------
 # DATA SOURCES
 # -----------------------------------------------------------------------------
@@ -108,7 +121,7 @@ locals {
 
 resource "azurerm_resource_group" "costs" {
   name     = local.resource_group_name
-  location = "eastus"
+  location = var.location
 
   tags = local.common_tags
 }
