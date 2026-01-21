@@ -140,7 +140,7 @@ resource "aws_iam_user_policy" "massdriver_costs" {
         Sid      = "HeadBucket"
         Effect   = "Allow"
         Action   = ["s3:HeadBucket"]
-        Resource = "*"
+        Resource = aws_s3_bucket.cur_reports.arn
       },
       {
         Sid      = "ListBucket"
@@ -193,13 +193,13 @@ output "access_key_id" {
 }
 
 output "secret_access_key" {
-  description = "The secret access key for the massdriver-costs IAM user"
+  description = "The secret access key for the massdriver-costs IAM user. WARNING: This value is stored in Terraform state. Treat state files as sensitive and consider using AWS Secrets Manager for production deployments."
   value       = aws_iam_access_key.massdriver_costs.secret
   sensitive   = true
 }
 
 output "massdriver_integration_config" {
-  description = "Configuration values to provide to Massdriver"
+  description = "Configuration values to provide to Massdriver. WARNING: Contains sensitive credentials stored in Terraform state. Treat state files as sensitive and consider using AWS Secrets Manager for production deployments."
   value = {
     access_key_id     = aws_iam_access_key.massdriver_costs.id
     secret_access_key = aws_iam_access_key.massdriver_costs.secret

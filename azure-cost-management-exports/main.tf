@@ -42,6 +42,39 @@ provider "azurerm" {
 }
 
 # -----------------------------------------------------------------------------
+# VARIABLES
+# -----------------------------------------------------------------------------
+
+variable "export_recurrence_duration" {
+  description = <<-EOT
+    Duration for the cost management export recurrence period. This determines when the export will stop running.
+    Format: time duration string (e.g., "17520h" for ~2 years, "43800h" for ~5 years).
+    
+    WARNING: The export will automatically stop after this duration. Plan to update this value or re-apply
+    the configuration before the end date to ensure continuous operation. Consider setting a calendar reminder
+    or implementing automated monitoring to alert before expiration.
+    
+    Default: "17520h" (~2 years)
+  EOT
+  type        = string
+  default     = "17520h" # ~2 years
+}
+
+variable "service_principal_password_duration" {
+  description = <<-EOT
+    Duration for the service principal password expiration. This determines when the password will expire.
+    Format: time duration string (e.g., "17520h" for ~2 years, "43800h" for ~5 years).
+    
+    WARNING: The service principal password will expire after this duration. Plan to rotate credentials
+    or re-apply the configuration before expiration to avoid service interruption.
+    
+    Default: "17520h" (~2 years)
+  EOT
+  type        = string
+  default     = "17520h" # ~2 years
+}
+
+# -----------------------------------------------------------------------------
 # DATA SOURCES
 # -----------------------------------------------------------------------------
 
@@ -101,8 +134,8 @@ resource "azurerm_storage_account" "costs" {
 # -----------------------------------------------------------------------------
 
 resource "azurerm_storage_container" "exports" {
-  name                  = local.container_name
-  storage_account_name  = azurerm_storage_account.costs.name
+  name                 = local.container_name
+  storage_account_id   = azurerm_storage_account.costs.id
   container_access_type = "private"
 }
 
@@ -117,7 +150,9 @@ resource "azurerm_subscription_cost_management_export" "massdriver" {
   subscription_id              = data.azurerm_subscription.current.id
   recurrence_type              = "Daily"
   recurrence_period_start_date = time_static.export_start.rfc3339
-  recurrence_period_end_date   = timeadd(time_static.export_start.rfc3339, "17520h") # ~2 years
+  # WARNING: This export will stop running after the duration specified in var.export_recurrence_duration.
+  # Plan to update this value or re-apply before expiration to ensure continuous operation.
+  recurrence_period_end_date = timeadd(time_static.export_start.rfc3339, var.export_recurrence_duration)
 
   export_data_storage_location {
     container_id     = azurerm_storage_container.exports.resource_manager_id
@@ -146,10 +181,15 @@ resource "azuread_service_principal" "massdriver" {
   tags = ["massdriver", "cost-management"]
 }
 
+resource "time_static" "password_start" {}
+
 resource "azuread_service_principal_password" "massdriver" {
   service_principal_id = azuread_service_principal.massdriver.id
   display_name         = "massdriver-cost-reader-secret"
-  end_date_relative    = "17520h" # ~2 years
+  # WARNING: This password will expire after the duration specified in var.service_principal_password_duration.
+  # Plan to rotate credentials or re-apply before expiration to avoid service interruption.
+  # end_date_relative is deprecated; using end_date with absolute timestamp instead
+  end_date = timeadd(time_static.password_start.rfc3339, var.service_principal_password_duration)
 }
 
 resource "azurerm_role_assignment" "blob_reader" {
