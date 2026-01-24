@@ -38,6 +38,12 @@ variable "cur_report_additional_artifacts" {
   default     = []
 }
 
+variable "bucket_region" {
+  description = "The AWS region where the S3 bucket will be created. This must match the region where the bucket is actually located. Defaults to 'us-west-2'."
+  type        = string
+  default     = "us-west-2"
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -111,7 +117,7 @@ resource "aws_cur_report_definition" "massdriver" {
   additional_schema_elements = ["RESOURCES"]
   s3_bucket                  = aws_s3_bucket.cur_reports.bucket
   s3_prefix                  = "reports"
-  s3_region                  = "us-east-1"
+  s3_region                  = var.bucket_region
   # additional_artifacts options: "REDSHIFT", "QUICKSIGHT", "ATHENA"
   additional_artifacts = var.cur_report_additional_artifacts
 
