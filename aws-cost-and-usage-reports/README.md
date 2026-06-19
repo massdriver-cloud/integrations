@@ -11,7 +11,7 @@ Full setup guide: [docs.massdriver.cloud/integrations/aws-cost-and-usage-reports
 | Name | Version |
 |------|---------|
 | opentofu | >= 1.0 |
-| aws | >= 5.0 |
+| aws | >= 5.16 |
 | random | >= 3.0 |
 
 ## Usage
@@ -32,6 +32,31 @@ module "massdriver_cur" {
 }
 ```
 
+## Inputs
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| name_prefix | string | `massdriver-costs` | Prefix for the bucket, report, and IAM user names |
+| bucket_region | string | `us-west-2` | Region for the S3 bucket (the report itself is always created in us-east-1) |
+| cur_report_additional_artifacts | list(string) | `[]` | Extra CUR artifacts: `REDSHIFT`, `QUICKSIGHT`, `ATHENA` |
+| tags | map(string) | `{}` | Tags applied to created resources |
+| activate_cost_allocation_tag | bool | `false` | Activate the `md-package` cost allocation tag (see below) |
+
+### Cost allocation tag mode
+
+By default Massdriver attributes costs to packages by reading resource tags from the
+Resource Groups Tagging API. If you set `activate_cost_allocation_tag = true`, the module
+activates `md-package` as an AWS cost allocation tag. AWS then adds a
+`resourceTags/user:md-package` column to the report, and Massdriver reads costs straight
+from it — more accurate (it covers deleted/retagged resources and line items the Tagging
+API can't see) and with no extra API calls.
+
+Notes:
+
+- This is a billing setting and only succeeds in the AWS **management (payer) account**.
+- It applies going forward only and can take ~24 hours to appear in reports.
+- If you leave it `false`, the Tagging API path is used and everything still works.
+
 ## Outputs
 
 | Name | Description |
@@ -48,6 +73,7 @@ module "massdriver_cur" {
 - S3 bucket for CUR reports
 - S3 bucket policy for AWS Billing service
 - Cost and Usage Report definition
+- Cost allocation tag activation for `md-package` (only when `activate_cost_allocation_tag = true`)
 - IAM user `massdriver-costs`
 - IAM policy with minimal read permissions
 - Access key for the IAM user

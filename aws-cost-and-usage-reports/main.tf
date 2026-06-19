@@ -10,8 +10,9 @@ terraform {
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+      source = "hashicorp/aws"
+      # >= 5.16 for the aws_ce_cost_allocation_tag resource
+      version = ">= 5.16"
     }
     random = {
       source  = "hashicorp/random"
@@ -42,6 +43,12 @@ variable "bucket_region" {
   description = "The AWS region where the S3 bucket will be created. This must match the region where the bucket is actually located. Defaults to 'us-west-2'."
   type        = string
   default     = "us-west-2"
+}
+
+variable "activate_cost_allocation_tag" {
+  description = "Activate the 'md-package' AWS cost allocation tag. When active, the Cost and Usage Report includes a 'resourceTags/user:md-package' column and Massdriver reads costs directly from it instead of calling the Resource Groups Tagging API. This is a billing setting that must be applied in the AWS management (payer) account; it only applies going forward and can take ~24 hours to appear in reports. Leave disabled to use the Tagging API."
+  type        = bool
+  default     = false
 }
 
 data "aws_caller_identity" "current" {}
@@ -124,6 +131,21 @@ resource "aws_cur_report_definition" "massdriver" {
   report_versioning = "OVERWRITE_REPORT"
 
   depends_on = [aws_s3_bucket_policy.cur_reports]
+}
+
+# -----------------------------------------------------------------------------
+# COST ALLOCATION TAG (optional, management/payer account only)
+# -----------------------------------------------------------------------------
+# Activating 'md-package' as a cost allocation tag adds a
+# 'resourceTags/user:md-package' column to the CUR. Massdriver auto-detects that
+# column and reads costs directly from it (more accurate, no Tagging API calls).
+# This is a billing-level setting and only succeeds in the management/payer account.
+
+resource "aws_ce_cost_allocation_tag" "md_package" {
+  count = var.activate_cost_allocation_tag ? 1 : 0
+
+  tag_key = "md-package"
+  status  = "Active"
 }
 
 # -----------------------------------------------------------------------------
