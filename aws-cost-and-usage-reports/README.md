@@ -41,6 +41,7 @@ module "massdriver_cur" {
 | cur_report_additional_artifacts | list(string) | `[]` | Extra CUR artifacts: `REDSHIFT`, `QUICKSIGHT`, `ATHENA` |
 | tags | map(string) | `{}` | Tags applied to created resources |
 | activate_cost_allocation_tag | bool | `false` | Activate the `md-package` cost allocation tag (see below) |
+| activate_md_instance_cost_allocation_tag | bool | `false` | Activate the `md-instance` cost allocation tag (see below) |
 
 ### Cost allocation tag mode
 
@@ -56,6 +57,27 @@ Notes:
 - This is a billing setting and only succeeds in the AWS **management (payer) account**.
 - It applies going forward only and can take ~24 hours to appear in reports.
 - If you leave it `false`, the Tagging API path is used and everything still works.
+
+### The `md-instance` tag
+
+If your organization uses custom default tags, Massdriver tags resources with `md-instance`
+and does not send `md-package`. When the report has any cost allocation tag column,
+Massdriver reads tags only from those columns. Costs for resources that carry only
+`md-instance` are not attributed until `md-instance` is also an active cost allocation tag.
+Set `activate_md_instance_cost_allocation_tag = true` to activate it.
+
+Notes:
+
+- AWS rejects the activation until the `md-instance` key is in the billing data of the
+  account. The key appears up to 24 hours after the first resource with that tag exists.
+  Apply this setting after Massdriver has deployed at least one resource with `md-instance`.
+- If your resources do not carry `md-instance`, keep this setting `false`. Otherwise
+  `tofu apply` fails.
+- This is a billing setting and only succeeds in the AWS **management (payer) account**.
+- It applies going forward only. Costs from before the activation are not attributed by
+  `md-instance`.
+- You can activate `md-package` and `md-instance` together. Resources deployed before the
+  switch to custom default tags can still carry `md-package`.
 
 ## Outputs
 
@@ -74,6 +96,7 @@ Notes:
 - S3 bucket policy for AWS Billing service
 - Cost and Usage Report definition
 - Cost allocation tag activation for `md-package` (only when `activate_cost_allocation_tag = true`)
+- Cost allocation tag activation for `md-instance` (only when `activate_md_instance_cost_allocation_tag = true`)
 - IAM user `massdriver-costs`
 - IAM policy with minimal read permissions
 - Access key for the IAM user

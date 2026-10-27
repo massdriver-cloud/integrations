@@ -51,6 +51,12 @@ variable "activate_cost_allocation_tag" {
   default     = false
 }
 
+variable "activate_md_instance_cost_allocation_tag" {
+  description = "Activate the 'md-instance' AWS cost allocation tag. Set this to true when your organization uses custom default tags, because Massdriver then tags resources with 'md-instance' and not 'md-package'. When the report has any cost allocation tag column, Massdriver reads tags only from those columns, so costs for resources that carry only 'md-instance' are not attributed until this tag is active. AWS rejects the activation until the 'md-instance' key is in the billing data of the account. The key appears up to 24 hours after the first resource with that tag exists. Leave this false if your resources do not carry 'md-instance'. This is a billing setting that must be applied in the AWS management (payer) account. It applies going forward only."
+  type        = bool
+  default     = false
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -145,6 +151,17 @@ resource "aws_ce_cost_allocation_tag" "md_package" {
   count = var.activate_cost_allocation_tag ? 1 : 0
 
   tag_key = "md-package"
+  status  = "Active"
+}
+
+# A separate switch from md-package because AWS rejects activation of a tag key
+# that is not yet in the billing data. Organizations on the legacy default tags
+# never send md-instance, so activating it together with md-package would fail
+# their apply.
+resource "aws_ce_cost_allocation_tag" "md_instance" {
+  count = var.activate_md_instance_cost_allocation_tag ? 1 : 0
+
+  tag_key = "md-instance"
   status  = "Active"
 }
 
