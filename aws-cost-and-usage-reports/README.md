@@ -28,7 +28,7 @@ Or as a module:
 
 ```hcl
 module "massdriver_cur" {
-  source = "github.com/massdriver-cloud/integrations//aws-cost-and-usage-reports"
+  source = "github.com/massdriver-cloud/integrations//aws-cost-and-usage-reports?ref=v2.0.0"
 }
 ```
 
@@ -40,44 +40,48 @@ module "massdriver_cur" {
 | bucket_region | string | `us-west-2` | Region for the S3 bucket (the report itself is always created in us-east-1) |
 | cur_report_additional_artifacts | list(string) | `[]` | Extra CUR artifacts: `REDSHIFT`, `QUICKSIGHT`, `ATHENA` |
 | tags | map(string) | `{}` | Tags applied to created resources |
-| activate_cost_allocation_tag | bool | `false` | Activate the `md-package` cost allocation tag (see below) |
-| activate_md_instance_cost_allocation_tag | bool | `false` | Activate the `md-instance` cost allocation tag (see below) |
+| cost_allocation_tags | list(string) | `[]` | Massdriver tag keys to activate as cost allocation tags: `md-package`, `md-instance` (see below) |
 
 ### Cost allocation tag mode
 
-By default Massdriver attributes costs to packages by reading resource tags from the
-Resource Groups Tagging API. If you set `activate_cost_allocation_tag = true`, the module
-activates `md-package` as an AWS cost allocation tag. AWS then adds a
-`resourceTags/user:md-package` column to the report, and Massdriver reads costs straight
-from it — more accurate (it covers deleted/retagged resources and line items the Tagging
-API can't see) and with no extra API calls.
+By default Massdriver attributes costs to instances by reading resource tags from the
+Resource Groups Tagging API. Each key in `cost_allocation_tags` is activated as an AWS
+cost allocation tag. AWS then adds a `resourceTags/user:<key>` column to the report, and
+Massdriver reads costs straight from it. This is more accurate: it covers deleted and
+retagged resources and line items the Tagging API can't see, and it needs no extra API calls.
+
+| Organization default tags | `cost_allocation_tags` |
+|---------------------------|------------------------|
+| Legacy | `["md-package"]` |
+| Custom | `["md-instance"]` |
+| Moving from legacy to custom | `["md-package", "md-instance"]` |
+
+When the report has any cost allocation tag column, Massdriver reads tags only from those
+columns. Costs for resources that carry only `md-instance` are not attributed until
+`md-instance` is active.
+
+```hcl
+module "massdriver_cur" {
+  source               = "github.com/massdriver-cloud/integrations//aws-cost-and-usage-reports?ref=v2.0.0"
+  cost_allocation_tags = ["md-package", "md-instance"]
+}
+```
 
 Notes:
 
-- This is a billing setting and only succeeds in the AWS **management (payer) account**.
-- It applies going forward only and can take ~24 hours to appear in reports.
-- If you leave it `false`, the Tagging API path is used and everything still works.
-
-### The `md-instance` tag
-
-If your organization uses custom default tags, Massdriver tags resources with `md-instance`
-and does not send `md-package`. When the report has any cost allocation tag column,
-Massdriver reads tags only from those columns. Costs for resources that carry only
-`md-instance` are not attributed until `md-instance` is also an active cost allocation tag.
-Set `activate_md_instance_cost_allocation_tag = true` to activate it.
-
-Notes:
-
-- AWS rejects the activation until the `md-instance` key is in the billing data of the
-  account. The key appears up to 24 hours after the first resource with that tag exists.
-  Apply this setting after Massdriver has deployed at least one resource with `md-instance`.
-- If your resources do not carry `md-instance`, keep this setting `false`. Otherwise
-  `tofu apply` fails.
+- AWS rejects the activation of a key until it is in the billing data of the account. The
+  key appears up to 24 hours after the first resource with that tag exists. Add
+  `md-instance` after Massdriver has deployed at least one resource with that tag.
 - This is a billing setting and only succeeds in the AWS **management (payer) account**.
 - It applies going forward only. Costs from before the activation are not attributed by
-  `md-instance`.
-- You can activate `md-package` and `md-instance` together. Resources deployed before the
-  switch to custom default tags can still carry `md-package`.
+  that key.
+- If you leave the list empty, the Tagging API path is used and everything still works.
+
+### Upgrading from v1
+
+`v2.0.0` replaces `activate_cost_allocation_tag = true` with
+`cost_allocation_tags = ["md-package"]`. The module moves the existing `md-package`
+activation in state, so `tofu apply` does not deactivate it.
 
 ## Outputs
 
@@ -95,8 +99,7 @@ Notes:
 - S3 bucket for CUR reports
 - S3 bucket policy for AWS Billing service
 - Cost and Usage Report definition
-- Cost allocation tag activation for `md-package` (only when `activate_cost_allocation_tag = true`)
-- Cost allocation tag activation for `md-instance` (only when `activate_md_instance_cost_allocation_tag = true`)
+- Cost allocation tag activation for each key in `cost_allocation_tags`
 - IAM user `massdriver-costs`
 - IAM policy with minimal read permissions
 - Access key for the IAM user
