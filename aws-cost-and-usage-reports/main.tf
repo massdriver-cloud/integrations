@@ -45,10 +45,15 @@ variable "bucket_region" {
   default     = "us-west-2"
 }
 
-variable "activate_cost_allocation_tag" {
-  description = "Activate the 'md-package' AWS cost allocation tag. When active, the Cost and Usage Report includes a 'resourceTags/user:md-package' column and Massdriver reads costs directly from it instead of calling the Resource Groups Tagging API. This is a billing setting that must be applied in the AWS management (payer) account; it only applies going forward and can take ~24 hours to appear in reports. Leave disabled to use the Tagging API."
-  type        = bool
-  default     = false
+variable "cost_allocation_tags" {
+  description = "Massdriver tag keys to activate as AWS cost allocation tags: 'md-package', 'md-instance', or both. For each active key, the Cost and Usage Report includes a 'resourceTags/user:<key>' column and Massdriver reads costs directly from it instead of calling the Resource Groups Tagging API. Organizations on the legacy default tags use 'md-package'. Organizations with custom default tags use 'md-instance'. AWS rejects the activation of a key until it is in the billing data of the account, up to 24 hours after the first resource with that tag exists. This is a billing setting that must be applied in the AWS management (payer) account. It applies going forward only. Leave empty to use the Tagging API."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for tag in var.cost_allocation_tags : contains(["md-package", "md-instance"], tag)])
+    error_message = "Each entry in cost_allocation_tags must be 'md-package' or 'md-instance'."
+  }
 }
 
 data "aws_caller_identity" "current" {}
@@ -136,16 +141,21 @@ resource "aws_cur_report_definition" "massdriver" {
 # -----------------------------------------------------------------------------
 # COST ALLOCATION TAG (optional, management/payer account only)
 # -----------------------------------------------------------------------------
-# Activating 'md-package' as a cost allocation tag adds a
-# 'resourceTags/user:md-package' column to the CUR. Massdriver auto-detects that
+# Activating a Massdriver tag as a cost allocation tag adds a
+# 'resourceTags/user:<key>' column to the CUR. Massdriver auto-detects that
 # column and reads costs directly from it (more accurate, no Tagging API calls).
 # This is a billing-level setting and only succeeds in the management/payer account.
 
-resource "aws_ce_cost_allocation_tag" "md_package" {
-  count = var.activate_cost_allocation_tag ? 1 : 0
+resource "aws_ce_cost_allocation_tag" "massdriver" {
+  for_each = toset(var.cost_allocation_tags)
 
-  tag_key = "md-package"
+  tag_key = each.key
   status  = "Active"
+}
+
+moved {
+  from = aws_ce_cost_allocation_tag.md_package[0]
+  to   = aws_ce_cost_allocation_tag.massdriver["md-package"]
 }
 
 # -----------------------------------------------------------------------------
