@@ -11,6 +11,7 @@ These modules create the necessary cloud infrastructure for Massdriver to integr
 | Integration | Cloud | Documentation |
 |-------------|-------|---------------|
 | [AWS Cost and Usage Reports](./aws-cost-and-usage-reports) | AWS | [docs.massdriver.cloud/integrations/aws-cost-and-usage-reports](https://docs.massdriver.cloud/integrations/aws-cost-and-usage-reports) |
+| [AWS IaC Coverage](./aws-iac-coverage) | AWS | [docs.massdriver.cloud/integrations/aws-iac-coverage](https://docs.massdriver.cloud/integrations/aws-iac-coverage) |
 | [Azure Cost Management Exports](./azure-cost-management-exports) | Azure | [docs.massdriver.cloud/integrations/azure-cost-management-exports](https://docs.massdriver.cloud/integrations/azure-cost-management-exports) |
 
 ## Usage
